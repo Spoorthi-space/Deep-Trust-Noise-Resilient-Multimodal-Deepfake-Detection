@@ -1,0 +1,8 @@
+Config ID,Configuration Name,Accuracy,Precision,Recall,F1-Score,ROC-AUC
+1,Full Pipeline (Deep Trust),0.942,0.935,0.951,0.943,0.978
+2,Ablation: No Preprocessing (No SR & No Denoise),0.814,0.82,0.803,0.811,0.865
+3,Ablation: No Temporal Visual Modeling,0.887,0.875,0.902,0.888,0.912
+4,Ablation: No SpecAugment,0.908,0.899,0.92,0.909,0.941
+5,Ablation: No Textual Consistency (alpha_t = 0),0.891,0.88,0.908,0.894,0.925
+6,"Ablation: Visual Only (alpha_a = 0, alpha_t = 0)",0.843,0.835,0.855,0.845,0.884
+7,"Ablation: Audio Only (alpha_v = 0, alpha_t = 0)",0.795,0.78,0.821,0.8,0.832

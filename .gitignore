@@ -1,0 +1,33 @@
+# Dependency directories
+node_modules/
+backend/venv/
+backend/.venv/
+.venv/
+venv/
+
+# Local databases & uploads
+apps/pocketbase/pb_data/
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+
+# Python cache & build files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Compiled build outputs
+dist/
+apps/web/dist/
