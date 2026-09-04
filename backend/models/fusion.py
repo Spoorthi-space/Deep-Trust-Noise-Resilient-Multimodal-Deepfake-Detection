@@ -72,11 +72,12 @@ class FusionPredictor:
         else:
             print(f"[WARNING] Fusion weights file not found at {weights_path}.")
 
-    def predict(self, ev, ea, et, filename_seed="default"):
+    def predict(self, ev, ea, et, filename_seed="default", is_image=False):
         """
         Fuses visual (ev), audio (ea), and consistency (et) tensors.
         Returns final probability and modality weights.
         filename_seed is used to produce deterministic demo scores for the same file.
+        is_image: when True, forces gating weights to [1.0, 0.0, 0.0] as audio/consistency do not apply.
         """
         # Integrity checks
         if not self.weights_loaded:
@@ -86,9 +87,15 @@ class FusionPredictor:
                 import numpy as np
                 seed = int(hashlib.md5(("fusion_" + filename_seed).encode()).hexdigest(), 16) % (2**31)
                 rng = np.random.RandomState(seed)
-                w_v = float(rng.uniform(0.30, 0.55))
-                w_a = float(rng.uniform(0.20, 0.38))
-                w_t = round(1.0 - w_v - w_a, 4)
+
+                # Short-circuit weights for image input (Level 1: reporting-only)
+                if is_image:
+                    weights = [1.0, 0.0, 0.0]
+                else:
+                    w_v = float(rng.uniform(0.30, 0.55))
+                    w_a = float(rng.uniform(0.20, 0.38))
+                    w_t = round(1.0 - w_v - w_a, 4)
+                    weights = [w_v, w_a, w_t]
                 
                 # Check verdict from heuristic
                 verdict = determine_mock_verdict(filename_seed)
@@ -96,10 +103,9 @@ class FusionPredictor:
                     prob = float(rng.uniform(0.76, 0.95))
                 else:
                     prob = float(rng.uniform(0.03, 0.18))
-                return prob, [w_v, w_a, w_t], True
+                return prob, weights, True
             else:
                 raise RuntimeError("MODEL_NOT_READY: Fusion model weights are missing or not loaded.")
-
 
         # inputs are (1, 256) tensors
         ev_tensor = ev.to(self.device)
@@ -107,8 +113,16 @@ class FusionPredictor:
         et_tensor = et.to(self.device)
         
         with torch.no_grad():
+            # [Level 2 Hook] When dedicated visual classifier weights exist and fusion bypass is desired:
+            # if is_image and hasattr(self, 'predict_visual_only'):
+            #     prob = self.predict_visual_only(ev_tensor)
+            #     return prob, [1.0, 0.0, 0.0], False
             logit, weights = self.model(ev_tensor, ea_tensor, et_tensor)
             prob = torch.sigmoid(logit).item()
             weights_list = weights.cpu().squeeze().tolist()
+
+        # Level 1: image input has 100% visual influence and 0% audio/consistency
+        if is_image:
+            weights_list = [1.0, 0.0, 0.0]
             
         return prob, weights_list, False

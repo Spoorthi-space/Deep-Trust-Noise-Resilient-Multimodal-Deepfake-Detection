@@ -46,24 +46,27 @@ const ResultsDashboardPage = () => {
           try { contentAnalysis = JSON.parse(contentAnalysis); } catch (e) {}
         }
         
-        return {
-          id: item.id,
-          userId: item.userId,
-          fileName: item.fileName,
-          fileType: item.fileType,
-          uploadedFile: item.uploadedFile,
-          thumbnail: item.thumbnail,
-          created: item.created,
-          
-          verdict: item.result,
-          confidence: item.confidence,
-          riskLevel: item.riskLevel,
-          audioAnalysis: audioAnalysis,
-          visualAnalysis: visualAnalysis,
-          textualAnalysis: contentAnalysis,
-          notes: item.summary,
-          
-          gatingWeights: item.gatingWeights || visualAnalysis?.gatingWeights || { visual: 0.33, audio: 0.33, textual: 0.33 },
+          const isImg = item.fileType === 'Image' || (item.fileType && item.fileType.startsWith('image/')) || (/\.(jpe?g|png|webp|bmp)$/i.test(item.fileName || ''));
+          const defaultGw = isImg ? { visual: 1.0, audio: 0.0, textual: 0.0 } : { visual: 0.33, audio: 0.33, textual: 0.33 };
+
+          return {
+            id: item.id,
+            userId: item.userId,
+            fileName: item.fileName,
+            fileType: item.fileType,
+            uploadedFile: item.uploadedFile,
+            thumbnail: item.thumbnail,
+            created: item.created,
+            
+            verdict: item.result,
+            confidence: item.confidence,
+            riskLevel: item.riskLevel,
+            audioAnalysis: audioAnalysis,
+            visualAnalysis: visualAnalysis,
+            textualAnalysis: contentAnalysis,
+            notes: item.summary,
+            
+            gatingWeights: item.gatingWeights || visualAnalysis?.gatingWeights || defaultGw,
           latencyProfile: item.latencyProfile || {
             videoPreprocessingMs: 120.0,
             audioPreprocessingMs: 80.0,

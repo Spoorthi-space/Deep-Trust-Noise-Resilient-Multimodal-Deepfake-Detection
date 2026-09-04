@@ -207,7 +207,10 @@ const UploadAnalysisPage = () => {
       formData.append("riskLevel", analysisResult.riskLevel);
 
       formData.append("audioAnalysis", JSON.stringify(analysisResult.audioAnalysis));
-      formData.append("visualAnalysis", JSON.stringify(analysisResult.visualAnalysis));
+      formData.append("visualAnalysis", JSON.stringify({
+        ...analysisResult.visualAnalysis,
+        gatingWeights: analysisResult.gatingWeights
+      }));
       formData.append("contentAnalysis", JSON.stringify(analysisResult.textualAnalysis));
       formData.append("summary", analysisResult.notes);
 

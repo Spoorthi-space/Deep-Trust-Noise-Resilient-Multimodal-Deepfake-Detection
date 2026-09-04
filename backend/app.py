@@ -154,15 +154,19 @@ async def analyze(file: UploadFile = File(...)):
 
             # Gated fusion (visual-only weighting)
             t_inf_fusion_start = time.time()
-            p_final, gating_weights, mock_f = fusion_predictor.predict(ev_embed, ea_embed, et_embed, filename_seed=file.filename)
+            p_final, gating_weights, mock_f = fusion_predictor.predict(
+                ev_embed, ea_embed, et_embed, filename_seed=file.filename, is_image=True
+            )
             t_inf_fusion = (time.time() - t_inf_fusion_start) * 1000.0
 
             # Override results to Authentic for webcam recordings
             if file.filename.startswith("live_webcam_capture_"):
                 p_final = 0.05
                 p_v = 0.08
-                p_a = 0.05
-                p_sync = 0.05
+
+            visual_score = int(p_v * 100)
+            audio_score = None
+            sync_score = None
 
             # XAI — generate heatmap on single image frame
             t_xai_start = time.time()
@@ -224,6 +228,10 @@ async def analyze(file: UploadFile = File(...)):
                 p_a = 0.04
                 p_sync = 0.02
 
+            visual_score = int(p_v * 100)
+            audio_score = int(p_a * 100)
+            sync_score = int(p_sync * 100)
+
             # 9. Explainable AI Heatmap Generation
             t_xai_start = time.time()
             overlay_video_path = None
@@ -282,7 +290,8 @@ async def analyze(file: UploadFile = File(...)):
             },
             "audioAnalysis": {
                 "summary": audio_summary,
-                "score": int(p_a * 100),
+                "score": audio_score,
+                "applicable": not is_image,
                 "xaiUrl": audio_xai_url
             },
             "visualAnalysis": {
@@ -290,15 +299,17 @@ async def analyze(file: UploadFile = File(...)):
                     "Low-quality frames reconstructed using ESPCN Super-Resolution. "
                     "Facial features processed by EfficientNet-B0" +
                     (" + BiLSTM temporal sequence network" if not is_image else " (single-frame static image mode)") +
-                    " (Modality Score: " + str(int(p_v * 100)) + "%). "
+                    " (Modality Score: " + str(visual_score) + "%). "
                     "Visual Grad-CAM heatmap saved: " + (os.path.basename(overlay_video_path) if overlay_video_path else "None") + "."
                 ),
-                "score": int(p_v * 100),
+                "score": visual_score,
+                "applicable": True,
                 "xaiUrl": visual_xai_url
             },
             "textualAnalysis": {
                 "summary": content_summary,
-                "score": int(p_sync * 100),
+                "score": sync_score,
+                "applicable": not is_image,
                 "transcript": transcript if not is_image else "N/A — Image input"
             },
             "latencyProfile": {

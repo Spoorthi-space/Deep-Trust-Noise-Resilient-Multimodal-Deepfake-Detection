@@ -9,6 +9,7 @@ venv/
 apps/pocketbase/pb_data/
 backend/uploads/*
 !backend/uploads/.gitkeep
+uploads/
 
 # IDE and OS files
 .vscode/
