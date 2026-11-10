@@ -121,14 +121,27 @@ git commit -m "Initial commit: Deep Trust multimodal deepfake detection system"
    pip install -r requirements.txt
    ```
 
-### Step 3: Run the Services (Concurrently)
+### Step 3: Run the Services
 
+#### Option A: One Command (Recommended)
+From the root directory, simply run:
+```bash
+npm run dev
+# Or on Windows PowerShell:
+.\start-all.ps1
+```
+This automatically starts all 3 services concurrently:
+* **Web Frontend**: http://localhost:3000/
+* **PocketBase DB**: http://localhost:8090/ (Dashboard: http://127.0.0.1:8090/_/)
+* **AI Backend**: http://localhost:8000/
+
+#### Option B: Manual (Three Terminals)
 Open **three terminal tabs** in VS Code:
 
 * **Terminal 1: PocketBase DB**
   ```bash
   cd apps/pocketbase
-  .\pocketbase.exe serve
+  .\pocketbase.exe serve --http="0.0.0.0:8090"
   ```
   *(Dashboard URL: http://127.0.0.1:8090/_/)*
 
@@ -141,7 +154,7 @@ Open **three terminal tabs** in VS Code:
   # On macOS/Linux:
   export DEEPTRUST_DEMO_MODE="true"
 
-  venv\Scripts\python.exe -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
+  venv\Scripts\python.exe -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
   ```
 
 * **Terminal 3: React Frontend**

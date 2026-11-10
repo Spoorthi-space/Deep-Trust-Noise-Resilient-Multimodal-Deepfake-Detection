@@ -15,6 +15,16 @@ class AudioPreprocessor:
     def __init__(self, enable_denoise=True):
         self.enable_denoise = enable_denoise
 
+    def get_ffmpeg_binary(self):
+        try:
+            import imageio_ffmpeg
+            exe = imageio_ffmpeg.get_ffmpeg_exe()
+            if exe and os.path.exists(exe):
+                return exe
+        except ImportError:
+            pass
+        return "ffmpeg"
+
     def extract_audio_from_video(self, video_path, output_wav_path):
         """
         Extracts mono audio at 16kHz from video using ffmpeg.
@@ -22,8 +32,9 @@ class AudioPreprocessor:
         if os.path.exists(output_wav_path):
             os.remove(output_wav_path)
             
+        ffmpeg_bin = self.get_ffmpeg_binary()
         cmd = [
-            "ffmpeg", "-y", "-i", video_path,
+            ffmpeg_bin, "-y", "-i", video_path,
             "-vn", "-acodec", "pcm_s16le",
             "-ar", "16000", "-ac", "1",
             output_wav_path
@@ -100,7 +111,9 @@ class AudioPreprocessor:
             
             # 2. Extract 20 MFCCs
             mfcc = librosa.feature.mfcc(y=y_clean, sr=sr, n_mfcc=20, n_fft=1024, hop_length=512)
-            
+            if mfcc.shape[1] < 9:
+                mfcc = np.pad(mfcc, ((0, 0), (0, 9 - mfcc.shape[1])), mode='edge')
+
             # 3. Compute Delta and Delta-Delta coefficients
             delta = librosa.feature.delta(mfcc)
             delta2 = librosa.feature.delta(mfcc, order=2)

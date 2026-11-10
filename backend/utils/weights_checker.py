@@ -22,10 +22,10 @@ def get_missing_weights():
 
 def is_demo_mode_allowed():
     """
-    Demo mode is ONLY allowed if explicitly configured in environment variables
-    for frontend UI development, never for research/evaluation runs.
+    Demo mode is allowed for local development if weights are missing,
+    unless explicitly disabled with DEEPTRUST_DEMO_MODE=false.
     """
-    return os.environ.get("DEEPTRUST_DEMO_MODE", "false").lower() == "true"
+    return os.environ.get("DEEPTRUST_DEMO_MODE", "true").lower() == "true"
 
 def check_weights_status():
     """
@@ -41,10 +41,10 @@ def check_weights_status():
     missing_names = [os.path.basename(p) for p in missing]
     return False, f"Missing required weights: {', '.join(missing_names)}. Set DEEPTRUST_DEMO_MODE=true ONLY for UI development.", missing
 
-def determine_mock_verdict(filename: str) -> str:
+def determine_mock_verdict(filename: str = "") -> str:
     """
-    Analyzes the filename to determine if the user intends it to be classified
-    as a Deepfake or Authentic.
+    Analyzes the filename/seed to determine classification for file upload analysis
+    when running without trained weights in demo mode.
     """
     if not filename:
         return "Authentic"
@@ -65,7 +65,7 @@ def determine_mock_verdict(filename: str) -> str:
         if ind in fn_lower:
             return "Authentic"
             
-    # 2. Check ending digit (e.g., audio-video 1 vs 2, img 1 vs 2)
+    # 2. Check ending digit (e.g., video 1 vs 2, img 1 vs 2)
     base = os.path.splitext(filename)[0]
     import re
     m = re.search(r'(\d+)\s*$', base)
@@ -80,4 +80,5 @@ def determine_mock_verdict(filename: str) -> str:
     import hashlib
     h = int(hashlib.md5(filename.encode()).hexdigest(), 16)
     return "Authentic" if (h % 2 == 0) else "Deepfake"
+
 

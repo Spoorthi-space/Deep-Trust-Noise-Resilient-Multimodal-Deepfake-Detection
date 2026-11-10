@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --kill-others --raw \"npm run dev --prefix apps/web\" \"npm run dev --prefix apps/pocketbase\"",
+    "dev": "concurrently --kill-others --names \"WEB,PB,AI\" -c \"cyan,magenta,green\" \"npm run dev --prefix apps/web\" \"npm run dev --prefix apps/pocketbase\" \"npm run dev:backend\"",
+    "dev:backend": "cd backend && venv\\Scripts\\python.exe -m uvicorn app:app --host 0.0.0.0 --port 8000",
     "build": "concurrently --raw \"npm run build --prefix apps/web\"",
     "start": "concurrently --kill-others --raw \"npm run start --prefix apps/pocketbase\"",
     "lint": "concurrently --raw \"npm run lint --prefix apps/web\""

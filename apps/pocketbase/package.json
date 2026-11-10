@@ -1,0 +1,9 @@
+﻿{
+  "name": "pocketbase",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pocketbase.exe serve --http=0.0.0.0:8090",
+    "start": "pocketbase.exe serve --http=0.0.0.0:8090"
+  }
+}

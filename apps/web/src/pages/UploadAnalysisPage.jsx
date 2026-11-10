@@ -169,7 +169,10 @@ const UploadAnalysisPage = () => {
       const aiFormData = new FormData();
       aiFormData.append("file", selectedFile);
 
-      const apiHost = typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : "http://127.0.0.1:8000";
+      const hostname = typeof window !== 'undefined'
+        ? (window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname)
+        : '127.0.0.1';
+      const apiHost = `http://${hostname}:8000`;
       const response = await fetch(`${apiHost}/analyze`, {
         method: "POST",
         body: aiFormData,
@@ -197,7 +200,7 @@ const UploadAnalysisPage = () => {
 
       // STEP 2: Save to PocketBase
       const formData = new FormData();
-      formData.append("userId", pb.authStore.model.id);
+      formData.append("userId", pb.authStore.model?.id || "anonymous");
       formData.append("fileName", selectedFile.name);
       formData.append("fileType", selectedFile.type);
       formData.append("uploadedFile", selectedFile);
@@ -232,7 +235,11 @@ const UploadAnalysisPage = () => {
     } catch (error) {
       clearInterval(progressInterval);
       console.error("Upload error:", error);
-      toast.error(error.message || "Upload failed. Please try again.");
+      if (error.message === "Failed to fetch") {
+        toast.error("Cannot connect to AI Backend (port 8000). If accessing via network IP, ensure backend was started with --host 0.0.0.0, or access via http://127.0.0.1:3000.");
+      } else {
+        toast.error(error.message || "Upload failed. Please try again.");
+      }
     } finally {
       setUploading(false);
     }

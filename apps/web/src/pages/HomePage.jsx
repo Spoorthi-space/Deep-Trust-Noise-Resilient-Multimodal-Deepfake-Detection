@@ -18,7 +18,10 @@ const HomePage = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const apiHost = typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : "http://127.0.0.1:8000";
+        const hostname = typeof window !== 'undefined'
+          ? (window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname)
+          : '127.0.0.1';
+        const apiHost = `http://${hostname}:8000`;
         const res = await fetch(`${apiHost}/api/stats`);
         if (res.ok) {
           const data = await res.json();

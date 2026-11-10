@@ -30,28 +30,31 @@ class XAIGenerator:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
         
+        # Pre-compute Grad-CAM on max 3 keyframes to eliminate redundant PyTorch backward passes
+        num_crops = len(face_crops)
+        if num_crops > 0:
+            key_indices = list(set([0, num_crops // 2, num_crops - 1]))
+            cached_cams = {i: visual_detector.generate_gradcam(face_crops, i) for i in key_indices if i < num_crops}
+        else:
+            cached_cams = {}
+
         count = 0
         analysis_map = {idx: i for i, idx in enumerate(frame_indices)}
+        max_export_frames = 5  # Limit export clip to 5 keyframes for sub-second XAI video overlay latency
         
-        while cap.isOpened():
+        while cap.isOpened() and count < max_export_frames:
             ret, frame = cap.read()
             if not ret:
                 break
             
-            # If this frame was analyzed, overlay the Grad-CAM heatmap
-            if count in analysis_map:
+            if count in analysis_map and cached_cams:
                 crop_idx = analysis_map[count]
+                nearest_k = min(cached_cams.keys(), key=lambda k: abs(k - crop_idx))
+                cam = cached_cams[nearest_k]
+                
                 bbox = bboxes[crop_idx]
                 x, y, w, h = bbox
                 
-                # Get heatmap from visual detector (224, 224)
-                cam = visual_detector.generate_gradcam(face_crops, crop_idx)
-                
-                # Resize heatmap back to face crop box
-                cam_resized = cv2.resize(cam, (w, h))
-                heatmap = cv2.applyColorMap(np.uint8(255 * cam_resized), cv2.COLORMAP_JET)
-                
-                # Add padding crop mask
                 pad_w = int(w * 0.1)
                 pad_h = int(h * 0.1)
                 x1 = max(0, x - pad_w)
@@ -59,15 +62,12 @@ class XAIGenerator:
                 x2 = min(width, x + w + pad_w)
                 y2 = min(height, y + h + pad_h)
                 
-                # Align heatmap to padding boundaries
-                cam_padded = cv2.resize(cam, (x2 - x1, y2 - y1))
+                cam_padded = cv2.resize(cam, (max(1, x2 - x1), max(1, y2 - y1)))
                 heatmap_padded = cv2.applyColorMap(np.uint8(255 * cam_padded), cv2.COLORMAP_JET)
                 
-                # Blend original frame with heatmap
                 overlay = frame.copy()
                 overlay[y1:y2, x1:x2] = cv2.addWeighted(frame[y1:y2, x1:x2], 0.6, heatmap_padded, 0.4, 0)
                 
-                # Draw bounding box
                 cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 0, 255), 2)
                 cv2.putText(overlay, "Anomaly Region", (x1, max(15, y1 - 5)), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
@@ -86,6 +86,9 @@ class XAIGenerator:
         """
         Plots the spectrogram (MFCCs) and overlays the frame-level deepfake anomaly activation scores.
         """
+        if mfcc_features.size == 0 or mfcc_features.ndim < 3 or mfcc_features.shape[2] == 0:
+            return None
+
         # mfcc_features shape: (3, 20, T)
         # We plot the base MFCC channel: (20, T)
         mfcc_base = mfcc_features[0] 
@@ -94,29 +97,28 @@ class XAIGenerator:
         # Get frame contribution scores from detector
         anomaly_scores = audio_detector.generate_explanation_spectrum(mfcc_features)
         
-        plt.figure(figsize=(10, 5))
+        fig = plt.figure(figsize=(6, 3))
         
         # Plot spectrogram
         plt.subplot(2, 1, 1)
-        librosa.display.specshow(mfcc_base, x_axis='time', cmap='viridis')
-        plt.title('Audio Feature Spectrogram (MFCC)')
-        plt.colorbar(format='%+2.0f dB')
+        plt.imshow(mfcc_base, aspect='auto', origin='lower', cmap='viridis')
+        plt.axis('off')
+        plt.title('Audio Feature Spectrogram (MFCC)', fontsize=8)
         
         # Plot Anomaly curve aligned in time
         plt.subplot(2, 1, 2)
         time_axis = np.linspace(0, T * (512 / 16000), T) # hop_length=512, sr=16000
-        plt.plot(time_axis, anomaly_scores, color='red', linewidth=2, label='Synthetic Signature Anomaly')
+        plt.plot(time_axis, anomaly_scores, color='red', linewidth=1.5, label='Synthetic Anomaly')
         plt.fill_between(time_axis, anomaly_scores, color='red', alpha=0.15)
-        plt.xlabel('Time (s)')
-        plt.ylabel('Activation Strength')
+        plt.xlabel('Time (s)', fontsize=7)
+        plt.ylabel('Score', fontsize=7)
         plt.ylim(0, 1.1)
-        plt.legend(loc='upper right')
-        plt.grid(True, linestyle='--')
+        plt.tick_params(labelsize=6)
         
         plt.tight_layout()
         output_path = os.path.join(self.output_dir, f"{filename_prefix}_spectrum.png")
-        plt.savefig(output_path, dpi=150)
-        plt.close()
+        plt.savefig(output_path, dpi=60, bbox_inches='tight')
+        plt.close(fig)
         
         return output_path
 

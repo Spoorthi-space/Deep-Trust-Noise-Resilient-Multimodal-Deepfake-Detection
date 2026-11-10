@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, status
+from fastapi import FastAPI, UploadFile, File, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -45,6 +45,8 @@ audio_detector = AudioDetector()
 consistency_checker = TextualConsistencyChecker()
 fusion_predictor = FusionPredictor()
 xai_generator = XAIGenerator(output_dir=UPLOAD_FOLDER)
+video_prep = VideoPreprocessor(enable_sr=False)
+audio_prep = AudioPreprocessor(enable_denoise=True)
 
 @app.get("/")
 def root():
@@ -91,7 +93,7 @@ def get_stats():
     }
 
 @app.post("/analyze")
-async def analyze(file: UploadFile = File(...)):
+async def analyze(request: Request, file: UploadFile = File(...)):
     # 1. Enforce weights presence verification
     ready, msg, missing = check_weights_status()
     if not ready:
@@ -123,8 +125,7 @@ async def analyze(file: UploadFile = File(...)):
             if img is None:
                 raise ValueError(f"Could not read image file: {file.filename}")
 
-            # Use VideoPreprocessor in single-frame mode
-            video_prep = VideoPreprocessor(enable_sr=True)
+            # Use global VideoPreprocessor in single-frame mode
             face_crops, bboxes, frame_indices = video_prep.extract_faces_from_image(img)
             t_p_video = (time.time() - t_p_video_start) * 1000.0
 
@@ -155,14 +156,9 @@ async def analyze(file: UploadFile = File(...)):
             # Gated fusion (visual-only weighting)
             t_inf_fusion_start = time.time()
             p_final, gating_weights, mock_f = fusion_predictor.predict(
-                ev_embed, ea_embed, et_embed, filename_seed=file.filename, is_image=True
+                ev_embed, ea_embed, et_embed, p_v=p_v, p_a=None, p_sync=None, filename_seed=file.filename, is_image=True
             )
             t_inf_fusion = (time.time() - t_inf_fusion_start) * 1000.0
-
-            # Override results to Authentic for webcam recordings
-            if file.filename.startswith("live_webcam_capture_"):
-                p_final = 0.05
-                p_v = 0.08
 
             visual_score = int(p_v * 100)
             audio_score = None
@@ -189,13 +185,11 @@ async def analyze(file: UploadFile = File(...)):
             # ── VIDEO PIPELINE ───────────────────────────────────────────────
             # 3. Preprocessing Video and Face crops
             t_p_video_start = time.time()
-            video_prep = VideoPreprocessor(enable_sr=True)
             face_crops, bboxes, frame_indices = video_prep.extract_faces(filepath, max_frames=30)
             t_p_video = (time.time() - t_p_video_start) * 1000.0
 
             # 4. Preprocessing Audio (Spectral Denoising & MFCC)
             t_p_audio_start = time.time()
-            audio_prep = AudioPreprocessor(enable_denoise=True)
             mfcc_features, sample_rate, clean_wav = audio_prep.extract_features(filepath, temp_wav_dir=UPLOAD_FOLDER)
             t_p_audio = (time.time() - t_p_audio_start) * 1000.0
 
@@ -206,7 +200,9 @@ async def analyze(file: UploadFile = File(...)):
 
             # 6. Audio Model Inference (2D CNN)
             t_inf_audio_start = time.time()
-            ea_embed, p_a, mock_a = audio_detector.predict(mfcc_features, filename_seed=file.filename)
+            ea_embed, p_a, mock_a = audio_detector.predict(
+                mfcc_features, filename_seed=file.filename, clean_wav_path=clean_wav
+            )
             t_inf_audio = (time.time() - t_inf_audio_start) * 1000.0
 
             # 7. Textual / Lip-Sync Consistency Analysis
@@ -218,15 +214,10 @@ async def analyze(file: UploadFile = File(...)):
 
             # 8. Adaptive Gated Embedding Fusion
             t_inf_fusion_start = time.time()
-            p_final, gating_weights, mock_f = fusion_predictor.predict(ev_embed, ea_embed, et_embed, filename_seed=file.filename)
+            p_final, gating_weights, mock_f = fusion_predictor.predict(
+                ev_embed, ea_embed, et_embed, p_v=p_v, p_a=p_a, p_sync=p_sync, filename_seed=file.filename
+            )
             t_inf_fusion = (time.time() - t_inf_fusion_start) * 1000.0
-
-            # Override results to Authentic for webcam recordings
-            if file.filename.startswith("live_webcam_capture_"):
-                p_final = 0.05
-                p_v = 0.08
-                p_a = 0.04
-                p_sync = 0.02
 
             visual_score = int(p_v * 100)
             audio_score = int(p_a * 100)
@@ -262,8 +253,9 @@ async def analyze(file: UploadFile = File(...)):
         total_latency = (time.time() - t_start) * 1000.0
 
         # Construct file URLs to return to the frontend
-        visual_xai_url = f"http://127.0.0.1:8000/media/{os.path.basename(overlay_video_path)}" if overlay_video_path else None
-        audio_xai_url = f"http://127.0.0.1:8000/media/{os.path.basename(audio_heatmap_path)}" if (not is_image and audio_heatmap_path) else None
+        base_url = str(request.base_url).rstrip('/')
+        visual_xai_url = f"{base_url}/media/{os.path.basename(overlay_video_path)}" if overlay_video_path else None
+        audio_xai_url = f"{base_url}/media/{os.path.basename(audio_heatmap_path)}" if (not is_image and audio_heatmap_path) else None
 
         # Clean up clean_wav if generated
         if clean_wav and os.path.exists(clean_wav):
